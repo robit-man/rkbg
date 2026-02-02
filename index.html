@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Section Algorithms — Three.js Bloom Morph Demo</title>
+  <style>
+    :root{
+      --bg0:#ffffff;
+      --bg1:#f6f8ff;
+      --ink:#0f1222;
+      --muted:#5a607a;
+      --card:rgba(255,255,255,.78);
+      --stroke:rgba(15,18,34,.12);
+      --accent:#0f1222;
+      --radius:12px;
+      --shadow:0 10px 40px rgba(15,18,34,.10);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    html,body{height:100%; margin:0; background: linear-gradient(180deg,var(--bg0),var(--bg1)); overflow:hidden;}
+    #app{position:fixed; inset:0; display:flex; align-items:stretch; }
+    canvas{flex:1; width:100%; height:100%; display:block; touch-action:none;}
+
+    /* Left panel */
+    #panel{
+      width: 320px;
+      max-width: 86vw;
+      padding: 16px;
+      box-sizing:border-box;
+      background: linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.66));
+      border-right:1px solid var(--stroke);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      z-index:10;
+    }
+    #brand{
+      display:flex; flex-direction:column; gap:6px;
+      padding: 10px 12px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.7);
+    }
+    #brand .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;}
+    #brand .title{font-family:var(--sans); font-weight:700; color:var(--ink); font-size:16px; line-height:1.2;}
+    #brand .hint{font-family:var(--sans); font-size:12px; color:var(--muted); line-height:1.35}
+
+    #buttons{
+      display:flex; flex-direction:column; gap:8px;
+      padding: 10px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.65);
+      overflow:auto;
+    }
+    .btn{
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      background: rgba(255,255,255,.85);
+      padding: 10px 10px;
+      cursor:pointer;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover{transform: translateY(-1px); box-shadow: 0 8px 18px rgba(15,18,34,.08);}
+    .btn:active{transform: translateY(0px) scale(.99);}
+    .btn .row{
+      display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    }
+    .btn .section{font-family:var(--sans); font-weight:700; color:var(--ink); font-size:13px;}
+    .btn .seed{font-family:var(--mono); font-size:12px; color:rgba(15,18,34,.7);}
+    .btn .alg{font-family:var(--mono); font-size:12px; color:rgba(15,18,34,.82);}
+    .btn .desc{font-family:var(--sans); font-size:12px; color:var(--muted); line-height:1.3;}
+    .btn.active{
+      border-color: rgba(15,18,34,.26);
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 10px 26px rgba(15,18,34,.10);
+    }
+
+    #details{
+      padding: 12px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.65);
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    #details .now{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(15,18,34,.7);
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    #details .name{
+      font-family: var(--sans);
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink);
+      line-height:1.2;
+    }
+    #details .sub{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(15,18,34,.82);
+    }
+    #details .blurb{
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--muted);
+      line-height:1.35;
+    }
+
+    #footer{
+      margin-top:auto;
+      padding: 10px 12px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.65);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(15,18,34,.68);
+      line-height:1.35;
+    }
+    #footer b{color: rgba(15,18,34,.9);}
+    #footer code{font-family:var(--mono); background:rgba(15,18,34,.06); padding:2px 4px; border-radius:6px;}
+
+    /* subtle grain */
+    #grain{
+      position:fixed; inset:0; pointer-events:none; z-index:5;
+      opacity:.12;
+      mix-blend-mode:multiply;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0px, rgba(0,0,0,.05) 1px, transparent 2px, transparent 4px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,.03) 0px, rgba(0,0,0,.03) 1px, transparent 2px, transparent 6px);
+      filter: blur(.2px);
+    }
+
+    @media (max-width: 860px){
+      #panel{width: 300px;}
+    }
+    @media (max-width: 720px){
+      #panel{width: 260px;}
+      #brand .hint{display:none;}
+    }
+  </style>
+
+  <!-- Latest Three.js via import map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@latest/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@latest/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div id="panel">
+      <div id="brand">
+        <div class="kicker">Section Algorithms</div>
+        <div class="title">Bloom morph demo (volumetric spline blobs)</div>
+        <div class="hint">Click sections to morph continuously between mathematical “structures”. White background + selective bloom.</div>
+      </div>
+
+      <div id="buttons"></div>
+
+      <div id="details">
+        <div class="now">Now Showing</div>
+        <div class="name" id="nowName">—</div>
+        <div class="sub" id="nowAlg">—</div>
+        <div class="blurb" id="nowDesc">—</div>
+      </div>
+
+      <div id="footer">
+        <b>Tip:</b> run from a local server (ESM).<br/>
+        Example: <code>python3 -m http.server</code><br/>
+        Tunables live at the top of the JS under <code>CONFIG</code>.
+      </div>
+    </div>
+
+    <canvas id="c"></canvas>
+    <div id="grain"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+    // ============================================================
+    // CONFIG — tweak here
+    // ============================================================
+    const CONFIG = {
+      // geometry density
+      STRANDS: 9,
+      PTS_PER_STRAND: 120,
+      NODE_COUNT: 12,
+
+      // "blob" look
+      BASE_BLOB_RADIUS: 0.030,
+      BLOB_OPACITY: 0.84,
+
+      // line look
+      LINE_OPACITY: 0.18,
+
+      // bloom (selective)
+      BLOOM_STRENGTH: 1.35,
+      BLOOM_RADIUS:   0.85,
+      BLOOM_THRESHOLD: 0.0, // we do selective bloom via layers + black background bloom pass
+
+      // morph timing
+      TRANSITION_SECONDS: 1.05,
+
+      // camera
+      CAMERA_Z: 4.0,
+      CAMERA_FOV: 45,
+      PARALLAX: 0.32,
+      AUTO_ORBIT: 0.08,
+
+      // scene scale
+      SCALE: 1.55,
+
+      // performance
+      DPR_MAX: 2.0
+    };
+
+    // ============================================================
+    // Sections (from your table)
+    // ============================================================
+    const SECTIONS = [
+      { id:'hero',       section:'Hero',       algorithm:'Temporal Spiral',     desc:'Golden ratio spiral, slow clockwise drift',            seed:'0xH3R0' },
+      { id:'features',   section:'Features',   algorithm:'Crystalline Grid',    desc:'Geometric precision, subtle pulse',                    seed:'0xF3AT' },
+      { id:'technology', section:'Technology', algorithm:'Wave Interference',   desc:'Overlapping sine waves, moiré patterns',               seed:'0xT3CH' },
+      { id:'selfient',   section:'Selfient',   algorithm:'Orbital Dance',       desc:'Particles in stable orbits',                          seed:'0x53LF' },
+      { id:'fractional', section:'Fractional', algorithm:'Fibonacci Flow',      desc:'PHI-based spacing, organic curves',                   seed:'0xFRAC' },
+      { id:'metrics',    section:'Metrics',    algorithm:'Data Streams',        desc:'Vertical flow lines, measurement feel',               seed:'0xM3TR' },
+      { id:'ecosystem',  section:'Ecosystem',  algorithm:'Network Topology',    desc:'Connected nodes, subtle links',                       seed:'0x3C0S' }
+    ];
+
+    // ============================================================
+    // Small helpers
+    // ============================================================
+    const PHI = (1 + Math.sqrt(5)) / 2;
+    const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ~2.399963
+
+    const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+    const lerp = (a,b,t)=> a + (b-a)*t;
+    const easeInOutCubic = (t)=> (t<0.5) ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+
+    function hashStringToSeed(str){
+      // FNV-1a-ish
+      let h = 2166136261 >>> 0;
+      for (let i=0;i<str.length;i++){
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+    function mulberry32(seed){
+      let a = seed >>> 0;
+      return function(){
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function rotY(x,z,ang){
+      const c=Math.cos(ang), s=Math.sin(ang);
+      return [x*c - z*s, x*s + z*c];
+    }
+    function rotX(y,z,ang){
+      const c=Math.cos(ang), s=Math.sin(ang);
+      return [y*c - z*s, y*s + z*c];
+    }
+    function rotZ(x,y,ang){
+      const c=Math.cos(ang), s=Math.sin(ang);
+      return [x*c - y*s, x*s + y*c];
+    }
+
+    // ============================================================
+    // Build UI
+    // ============================================================
+    const buttonsEl = document.getElementById('buttons');
+    const nowNameEl = document.getElementById('nowName');
+    const nowAlgEl  = document.getElementById('nowAlg');
+    const nowDescEl = document.getElementById('nowDesc');
+
+    const btnEls = new Map();
+    for (const s of SECTIONS){
+      const el = document.createElement('div');
+      el.className = 'btn';
+      el.dataset.id = s.id;
+      el.innerHTML = `
+        <div class="row">
+          <div class="section">${s.section}</div>
+          <div class="seed">${s.seed}</div>
+        </div>
+        <div class="alg">${s.algorithm}</div>
+        <div class="desc">${s.desc}</div>
+      `;
+      buttonsEl.appendChild(el);
+      btnEls.set(s.id, el);
+    }
+
+    function setActiveUI(id){
+      for (const [k,el] of btnEls) el.classList.toggle('active', k===id);
+      const meta = SECTIONS.find(x=>x.id===id);
+      nowNameEl.textContent = meta.section;
+      nowAlgEl.textContent  = meta.algorithm + '  ·  ' + meta.seed;
+      nowDescEl.textContent = meta.desc;
+    }
+
+    // ============================================================
+    // Three.js setup
+    // ============================================================
+    const canvas = document.getElementById('c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.DPR_MAX));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff); // true white for main render
+
+    const camera = new THREE.PerspectiveCamera(CONFIG.CAMERA_FOV, window.innerWidth/window.innerHeight, 0.01, 60);
+    camera.position.set(0, 0, CONFIG.CAMERA_Z);
+
+    // group that we want to bloom
+    const BLOOM_LAYER = 1;
+    const glowGroup = new THREE.Group();
+    glowGroup.layers.enable(BLOOM_LAYER);
+    scene.add(glowGroup);
+
+    // "volumetric blob spline" primitives:
+    const totalInstances = CONFIG.STRANDS * CONFIG.PTS_PER_STRAND;
+
+    const blobGeo = new THREE.IcosahedronGeometry(CONFIG.BASE_BLOB_RADIUS, 1);
+    const blobMat = new THREE.MeshBasicMaterial({
+      transparent:true,
+      opacity: CONFIG.BLOB_OPACITY,
+      blending: THREE.AdditiveBlending,
+      depthWrite:false,
+      vertexColors:true
+    });
+
+    const blobs = new THREE.InstancedMesh(blobGeo, blobMat, totalInstances);
+    blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    blobs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(totalInstances * 3), 3);
+    glowGroup.add(blobs);
+
+    // Per-strand polyline (subtle) to read as "spline"
+    const lines = [];
+    const linePosArrays = []; // Float32Array per strand
+    for (let s=0;s<CONFIG.STRANDS;s++){
+      const arr = new Float32Array(CONFIG.PTS_PER_STRAND * 3);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(arr, 3).setUsage(THREE.DynamicDrawUsage));
+      const m = new THREE.LineBasicMaterial({
+        transparent:true,
+        opacity: CONFIG.LINE_OPACITY,
+        blending: THREE.AdditiveBlending,
+        depthWrite:false,
+        color: new THREE.Color(0xffffff)
+      });
+      const ln = new THREE.Line(g, m);
+      ln.layers.enable(BLOOM_LAYER);
+      glowGroup.add(ln);
+      lines.push(ln);
+      linePosArrays.push(arr);
+    }
+
+    // Nodes (used mainly for Network Topology, but smoothly fades in/out across transitions)
+    const nodeGeo = new THREE.IcosahedronGeometry(CONFIG.BASE_BLOB_RADIUS * 2.2, 1);
+    const nodeMat = new THREE.MeshBasicMaterial({
+      transparent:true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite:false,
+      vertexColors:true
+    });
+    const nodes = new THREE.InstancedMesh(nodeGeo, nodeMat, CONFIG.NODE_COUNT);
+    nodes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    nodes.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CONFIG.NODE_COUNT * 3), 3);
+    nodes.layers.enable(BLOOM_LAYER);
+    glowGroup.add(nodes);
+
+    // ============================================================
+    // Selective bloom pipeline (white background + bloom only on glows)
+    // ============================================================
+    const bloomComposer = new EffectComposer(renderer);
+    const finalComposer = new EffectComposer(renderer);
+
+    const renderScene = new RenderPass(scene, camera);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      CONFIG.BLOOM_STRENGTH,
+      CONFIG.BLOOM_RADIUS,
+      CONFIG.BLOOM_THRESHOLD
+    );
+
+    bloomComposer.renderToScreen = false;
+    bloomComposer.addPass(renderScene);
+    bloomComposer.addPass(bloomPass);
+
+    const AdditiveBloomShader = {
+      uniforms: {
+        baseTexture:  { value: null },
+        bloomTexture: { value: null },
+        bloomStrength:{ value: 1.0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main(){
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D baseTexture;
+        uniform sampler2D bloomTexture;
+        uniform float bloomStrength;
+        varying vec2 vUv;
+        void main(){
+          vec4 base  = texture2D(baseTexture, vUv);
+          vec4 bloom = texture2D(bloomTexture, vUv);
+          vec3 col = base.rgb + bloom.rgb * bloomStrength;
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    };
+
+    const finalPass = new ShaderPass(AdditiveBloomShader, 'baseTexture');
+    finalPass.uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
+    finalPass.uniforms.bloomStrength.value = 1.0;
+
+    finalComposer.addPass(renderScene);
+    finalComposer.addPass(finalPass);
+
+    // ============================================================
+    // Effect definitions (unique math patterns per section)
+    // ============================================================
+    const globalRng = mulberry32(0xC0FFEE);
+    const strandPhase = Array.from({length: CONFIG.STRANDS}, ()=> globalRng()*Math.PI*2);
+    const strandTilt  = Array.from({length: CONFIG.STRANDS}, ()=> (globalRng()*2-1) * 0.65);
+    const strandBias  = Array.from({length: CONFIG.STRANDS}, ()=> (globalRng()*2-1) * 0.35);
+
+    function makeEffect(meta){
+      const seed = hashStringToSeed(meta.seed + '|' + meta.id);
+      const rng = mulberry32(seed);
+
+      // palette endpoints (HDR-ish; >1 blooms nicely under ACES)
+      let cA=[1.3,1.3,1.35], cB=[2.0,2.0,2.05];
+      if (meta.id==='hero')       { cA=[1.25,1.35,1.55]; cB=[2.20,2.10,2.00]; }
+      if (meta.id==='features')   { cA=[1.35,1.55,1.45]; cB=[2.20,2.40,2.30]; }
+      if (meta.id==='technology') { cA=[1.35,1.40,1.65]; cB=[2.30,2.10,2.55]; }
+      if (meta.id==='selfient')   { cA=[1.50,1.35,1.55]; cB=[2.55,2.15,2.35]; }
+      if (meta.id==='fractional') { cA=[1.45,1.55,1.40]; cB=[2.35,2.60,2.25]; }
+      if (meta.id==='metrics')    { cA=[1.35,1.45,1.55]; cB=[2.15,2.25,2.55]; }
+      if (meta.id==='ecosystem')  { cA=[1.45,1.40,1.55]; cB=[2.60,2.35,2.55]; }
+
+      // network precompute
+      let netNodes = null;
+      let netEdges = null;
+      if (meta.id==='ecosystem'){
+        netNodes = [];
+        for (let i=0;i<CONFIG.NODE_COUNT;i++){
+          // clustered sphere-ish distribution
+          const a = rng()*Math.PI*2;
+          const u = rng()*2-1;
+          const r = (0.45 + 0.85*Math.pow(rng(), 0.6));
+          const s = Math.sqrt(1-u*u);
+          const x = Math.cos(a)*s*r;
+          const y = u*r;
+          const z = Math.sin(a)*s*r;
+          netNodes.push([x,y,z]);
+        }
+        netEdges = [];
+        for (let s=0;s<CONFIG.STRANDS;s++){
+          let a = (rng()*CONFIG.NODE_COUNT)|0;
+          let b = (rng()*CONFIG.NODE_COUNT)|0;
+          if (b===a) b = (b+1)%CONFIG.NODE_COUNT;
+          const ox = (rng()*2-1)*0.55;
+          const oy = (rng()*2-1)*0.55;
+          const oz = (rng()*2-1)*0.55;
+          netEdges.push({a,b, o:[ox,oy,oz], ph:rng()*Math.PI*2});
+        }
+      }
+
+      // orbital precompute
+      let orbitAxes = null;
+      if (meta.id==='selfient'){
+        orbitAxes = [];
+        for (let s=0;s<CONFIG.STRANDS;s++){
+          const ax = (rng()*2-1);
+          const ay = (rng()*2-1);
+          const az = (rng()*2-1);
+          const len = Math.max(1e-6, Math.hypot(ax,ay,az));
+          orbitAxes.push([ax/len, ay/len, az/len]);
+        }
+      }
+
+      function colorAt(strand,u,t){
+        // subtle shimmer along spline
+        const shimmer = 0.10*Math.sin(t*1.1 + u*9.0 + strandPhase[strand]);
+        const rr = lerp(cA[0], cB[0], u) * (1.0 + shimmer);
+        const gg = lerp(cA[1], cB[1], u) * (1.0 + shimmer*0.9);
+        const bb = lerp(cA[2], cB[2], u) * (1.0 + shimmer*0.8);
+        return [rr,gg,bb];
+      }
+
+      function compute(strand, u, t){
+        // returns: [x,y,z, w]
+        // w = size/energy multiplier
+        const sp = strandPhase[strand];
+        const tilt = strandTilt[strand];
+        const bias = strandBias[strand];
+        const S = CONFIG.SCALE;
+
+        // Common gentle "breathing"
+        const breathe = 0.07*Math.sin(t*0.9 + sp);
+
+        if (meta.id==='hero'){
+          // Temporal Spiral — golden-ish logarithmic spiral + slow clockwise drift
+          const theta = (u*10.0*Math.PI) + sp + bias*1.2;
+          // growth that feels like phi
+          const growth = Math.pow(PHI, u*1.35) - 1.0; // 0..~phi^1.35
+          const r = (0.10 + 0.55*u + 0.18*growth) * (1.0 + 0.08*Math.sin(theta*0.5 + t*0.7));
+          const ang = theta - t*0.35; // clockwise drift
+          let x = r*Math.cos(ang);
+          let y = r*Math.sin(ang) * 0.82;
+          let z = (u-0.5)*0.7 + 0.12*Math.sin(ang*1.5 + t*0.5 + sp);
+          // subtle tilt
+          [y,z] = rotX(y,z, tilt*0.35);
+          return [x*S, y*S, z*S, 1.0 + 0.55*breathe];
+        }
+
+        if (meta.id==='features'){
+          // Crystalline Grid — crisp lattice lines + subtle pulse
+          const n = CONFIG.STRANDS;
+          const k = (strand/(n-1))*2-1; // -1..1
+          const pulse = 0.06*Math.sin(t*2.2 + k*3.0);
+          const spread = 1.25;
+          let x,y,z;
+          if (strand % 2 === 0){
+            // horizontal scanline
+            y = k*0.65*spread;
+            x = (u*2-1)*1.25*spread;
+          } else {
+            // vertical scanline
+            x = k*0.75*spread;
+            y = (u*2-1)*0.95*spread;
+          }
+          // quantize feel (crystal)
+          const q = 10;
+          x = Math.round(x*q)/q;
+          y = Math.round(y*q)/q;
+          z = 0.10*Math.sin((x+y)*6.0 + t*2.0 + sp) + pulse;
+          // very slight rotation for life
+          [x,y] = rotZ(x,y, 0.10*Math.sin(t*0.25));
+          return [x*S, y*S, z*S*0.7, 0.95 + 0.55*(pulse+0.12)];
+        }
+
+        if (meta.id==='technology'){
+          // Wave Interference — overlapping sines create moiré
+          const xx = (u*2-1) * 1.55;
+          const f1 = 3.2 + 0.2*Math.sin(sp);
+          const f2 = 5.1 + 0.3*Math.cos(sp*1.3);
+          const f3 = 2.4 + 0.2*Math.sin(sp*0.7);
+          const y = 0.32*Math.sin(xx*f1 + t*1.35 + sp) + 0.22*Math.sin(xx*f2 - t*0.95 + sp*1.7);
+          const z = 0.28*Math.sin(xx*f3 + t*1.55 + sp*0.8) + 0.10*Math.sin(u*10.0 + t*2.2 + strand);
+          let x = xx;
+          // gentle corkscrew rotate
+          const rot = 0.25*Math.sin(t*0.35 + strand*0.4);
+          [x, z] = rotY(x, z, rot);
+          return [x*S, y*S, z*S, 1.0 + 0.65*Math.abs(Math.sin(t*0.6 + u*6 + sp))*0.35];
+        }
+
+        if (meta.id==='selfient'){
+          // Orbital Dance — stable orbits with inclinations + precession
+          const a = u*Math.PI*2 + t*0.62 + sp;
+          const ring = 0.55 + 0.55*(strand/(CONFIG.STRANDS-1));
+          const e = 1.0 + 0.22*Math.sin(sp*1.2); // ellipse factor
+          let x = Math.cos(a)*ring*e;
+          let y = Math.sin(a)*ring*(1/e);
+          let z = 0.18*Math.sin(a*2.0 + sp) + 0.08*Math.cos(t*0.7 + strand);
+          // apply per-strand axis tilt
+          const ax = orbitAxes[strand][0], ay = orbitAxes[strand][1], az = orbitAxes[strand][2];
+          const pre = 0.18*Math.sin(t*0.22 + strand*0.5);
+          // rotate around an arbitrary axis by pre (small) + static tilt
+          // (approx via sequential rotations; good enough visually)
+          [y,z] = rotX(y,z, ay*0.65 + pre*0.3);
+          [x,z] = rotY(x,z, ax*0.65 + pre*0.35);
+          [x,y] = rotZ(x,y, az*0.65 + pre*0.25);
+          return [x*S, y*S, z*S, 0.95 + 0.55*(0.5+0.5*Math.sin(a + t*0.9))];
+        }
+
+        if (meta.id==='fractional'){
+          // Fibonacci Flow — phi / golden-angle spiral with organic undulation
+          // "arm" offset per strand
+          const arm = strand * (GOLDEN_ANGLE * 0.65) + bias;
+          // spiral angle grows with u using golden angle "feel"
+          const ang = arm + (u*CONFIG.PTS_PER_STRAND) * (GOLDEN_ANGLE * 0.095) + t*0.18;
+          const r = Math.pow(u, 0.55) * 1.35;
+          let x = Math.cos(ang) * r;
+          let y = Math.sin(ang) * r;
+          let z = 0.22*Math.sin(u*8.0*Math.PI + t*0.55 + sp) + 0.10*Math.cos(ang*2.0);
+          // gentle flow bend
+          x += 0.10*Math.sin(t*0.45 + y*2.0);
+          y += 0.10*Math.cos(t*0.45 + x*2.0);
+          return [x*S, y*S, z*S, 1.0 + 0.55*(0.5+0.5*Math.sin(t*0.8 + u*7 + sp))];
+        }
+
+        if (meta.id==='metrics'){
+          // Data Streams — vertical columns + traveling "packet" pulses (no wrap discontinuity)
+          const n = CONFIG.STRANDS;
+          const k = (strand/(n-1))*2-1; // -1..1
+          const x = k*1.05;
+          const y = (u*2-1)*1.35;
+          const z = 0.10*Math.sin(u*10.0 + t*1.6 + sp) + 0.08*Math.cos(t*0.6 + k*2.0);
+          // traveling packet highlight
+          const speed = 0.30;
+          const head = (t*speed + strand*0.07) % 1.0;
+          const d = Math.min(Math.abs(u-head), 1.0-Math.abs(u-head));
+          const packet = Math.exp(-(d*d)/0.0028); // sharp pulse
+          const w = 0.75 + 1.75*packet; // size/energy
+          return [x*S, y*S, z*S, w];
+        }
+
+        if (meta.id==='ecosystem'){
+          // Network Topology — quadratic bezier edges between nodes + subtle oscillation
+          const e = netEdges[strand];
+          const A = netNodes[e.a];
+          const B = netNodes[e.b];
+          const mx = (A[0]+B[0])*0.5 + e.o[0]*0.55;
+          const my = (A[1]+B[1])*0.5 + e.o[1]*0.55;
+          const mz = (A[2]+B[2])*0.5 + e.o[2]*0.55;
+
+          // quadratic bezier
+          const iu = 1-u;
+          let x = iu*iu*A[0] + 2*iu*u*mx + u*u*B[0];
+          let y = iu*iu*A[1] + 2*iu*u*my + u*u*B[1];
+          let z = iu*iu*A[2] + 2*iu*u*mz + u*u*B[2];
+
+          // subtle "link breathing"
+          const wob = 0.05*Math.sin(t*1.2 + e.ph + u*8.0);
+          x += wob*(A[1]-B[1]);
+          y += wob*(B[0]-A[0]);
+          z += 0.04*Math.cos(t*1.0 + sp + u*6.0);
+
+          // traveling signal pulse
+          const speed = 0.22;
+          const head = (t*speed + strand*0.09) % 1.0;
+          const d = Math.min(Math.abs(u-head), 1.0-Math.abs(u-head));
+          const sig = Math.exp(-(d*d)/0.0032);
+          const w = 0.8 + 1.6*sig;
+
+          return [x*S, y*S, z*S, w];
+        }
+
+        // fallback
+        return [0,0,0,1];
+      }
+
+      function nodeData(t){
+        if (meta.id !== 'ecosystem') return { vis:0, pos:null, col:[1.4,1.4,1.5] };
+        // animate nodes a hair (stable but alive)
+        const out = [];
+        for (let i=0;i<netNodes.length;i++){
+          const p = netNodes[i];
+          const ph = i*0.6;
+          out.push([
+            p[0] + 0.03*Math.sin(t*0.9 + ph),
+            p[1] + 0.03*Math.cos(t*0.8 + ph*1.2),
+            p[2] + 0.03*Math.sin(t*0.7 + ph*1.4)
+          ]);
+        }
+        return { vis:1, pos:out, col:[2.2,2.1,2.4] };
+      }
+
+      return {
+        meta,
+        seed,
+        compute,
+        colorAt,
+        nodeData
+      };
+    }
+
+    const EFFECTS = new Map(SECTIONS.map(s => [s.id, makeEffect(s)]));
+
+    // ============================================================
+    // Interaction + transition state
+    // ============================================================
+    let currentId = 'hero';
+    let targetId  = 'hero';
+    let transition = null; // {from,to,start,dur}
+
+    setActiveUI(currentId);
+
+    for (const [id, el] of btnEls){
+      el.addEventListener('click', ()=>{
+        if (id === targetId) return;
+        targetId = id;
+        transition = {
+          from: currentId,
+          to: targetId,
+          start: performance.now()/1000,
+          dur: CONFIG.TRANSITION_SECONDS
+        };
+        // UI: highlight target immediately (feels responsive)
+        setActiveUI(targetId);
+      });
+    }
+
+    // Pointer parallax
+    let pointerX=0, pointerY=0;
+    let aimX=0, aimY=0;
+    window.addEventListener('pointermove', (e)=>{
+      const nx = (e.clientX / window.innerWidth) * 2 - 1;
+      const ny = (e.clientY / window.innerHeight) * 2 - 1;
+      aimX = nx;
+      aimY = ny;
+    }, {passive:true});
+
+    // ============================================================
+    // Main animation loop
+    // ============================================================
+    const dummy = new THREE.Object3D();
+
+    function renderFrame(t){
+      const time = t * 0.001;
+
+      // smooth pointer
+      pointerX = lerp(pointerX, aimX, 0.08);
+      pointerY = lerp(pointerY, aimY, 0.08);
+
+      // camera drift + parallax (subtle)
+      const orbit = CONFIG.AUTO_ORBIT * time;
+      const px = pointerX * CONFIG.PARALLAX;
+      const py = -pointerY * CONFIG.PARALLAX;
+
+      camera.position.x = Math.sin(orbit)*0.45 + px;
+      camera.position.y = Math.sin(orbit*0.7)*0.18 + py;
+      camera.position.z = CONFIG.CAMERA_Z + Math.cos(orbit)*0.10;
+      camera.lookAt(0,0,0);
+
+      // Determine blend state
+      let A = EFFECTS.get(currentId);
+      let B = A;
+      let mix = 0;
+
+      if (transition){
+        const p = clamp01((time - transition.start) / transition.dur);
+        mix = easeInOutCubic(p);
+        A = EFFECTS.get(transition.from);
+        B = EFFECTS.get(transition.to);
+
+        if (p >= 1){
+          currentId = transition.to;
+          transition = null;
+          // keep UI consistent (already set on click)
+        }
+      }
+
+      // Update nodes (only meaningful in Network Topology; fades via vis blend)
+      const nA = A.nodeData(time);
+      const nB = B.nodeData(time);
+      const nodeVis = lerp(nA.vis, nB.vis, mix);
+
+      const nodeCols = nodes.instanceColor.array;
+      for (let i=0;i<CONFIG.NODE_COUNT;i++){
+        // positions
+        const pA = nA.pos ? nA.pos[i] : [0,0,0];
+        const pB = nB.pos ? nB.pos[i] : [0,0,0];
+        const x = lerp(pA[0], pB[0], mix);
+        const y = lerp(pA[1], pB[1], mix);
+        const z = lerp(pA[2], pB[2], mix);
+
+        // scale fades in/out via nodeVis
+        const s = (CONFIG.BASE_BLOB_RADIUS * 2.2) * (0.35 + 0.75*nodeVis);
+
+        dummy.position.set(x, y, z);
+        dummy.scale.setScalar(s);
+        dummy.rotation.set(0,0,0);
+        dummy.updateMatrix();
+        nodes.setMatrixAt(i, dummy.matrix);
+
+        // color
+        const cA = nA.col, cB = nB.col;
+        nodeCols[i*3+0] = lerp(cA[0], cB[0], mix) * (0.85 + 0.25*Math.sin(time*0.8 + i));
+        nodeCols[i*3+1] = lerp(cA[1], cB[1], mix) * (0.85 + 0.25*Math.sin(time*0.7 + i*1.3));
+        nodeCols[i*3+2] = lerp(cA[2], cB[2], mix) * (0.85 + 0.25*Math.sin(time*0.6 + i*1.9));
+      }
+      nodes.instanceMatrix.needsUpdate = true;
+      nodes.instanceColor.needsUpdate = true;
+
+      // Update strands (positions, blob instances, line vertices)
+      const blobCols = blobs.instanceColor.array;
+
+      for (let s=0;s<CONFIG.STRANDS;s++){
+        const lineArr = linePosArrays[s];
+        for (let i=0;i<CONFIG.PTS_PER_STRAND;i++){
+          const u = i / (CONFIG.PTS_PER_STRAND - 1);
+
+          const a = A.compute(s,u,time);
+          const b = B.compute(s,u,time);
+
+          const x = lerp(a[0], b[0], mix);
+          const y = lerp(a[1], b[1], mix);
+          const z = lerp(a[2], b[2], mix);
+          const w = lerp(a[3], b[3], mix);
+
+          // line positions
+          const li = i*3;
+          lineArr[li+0] = x;
+          lineArr[li+1] = y;
+          lineArr[li+2] = z;
+
+          // blob instance transform
+          const idx = s*CONFIG.PTS_PER_STRAND + i;
+
+          // "volumetric" vibe: slight radius modulation + taper at ends
+          const taper = Math.sin(u*Math.PI); // 0 at ends, 1 mid
+          const radius = CONFIG.BASE_BLOB_RADIUS * (0.75 + 0.55*taper) * (0.75 + 0.55*w);
+
+          dummy.position.set(x,y,z);
+          dummy.scale.setScalar(radius / CONFIG.BASE_BLOB_RADIUS);
+          dummy.rotation.set(0,0,0);
+          dummy.updateMatrix();
+          blobs.setMatrixAt(idx, dummy.matrix);
+
+          // HDR-ish color
+          const ca = A.colorAt(s,u,time);
+          const cb = B.colorAt(s,u,time);
+          blobCols[idx*3+0] = lerp(ca[0], cb[0], mix);
+          blobCols[idx*3+1] = lerp(ca[1], cb[1], mix);
+          blobCols[idx*3+2] = lerp(ca[2], cb[2], mix);
+        }
+
+        // push line updates
+        const geom = lines[s].geometry;
+        geom.attributes.position.needsUpdate = true;
+        geom.computeBoundingSphere();
+      }
+
+      blobs.instanceMatrix.needsUpdate = true;
+      blobs.instanceColor.needsUpdate = true;
+
+      // Subtle global rotation to keep it alive
+      glowGroup.rotation.y = 0.08*Math.sin(time*0.22);
+      glowGroup.rotation.x = 0.05*Math.sin(time*0.18);
+      glowGroup.rotation.z = 0.03*Math.sin(time*0.15);
+
+      // --- selective bloom render ---
+      const savedBg = scene.background;
+
+      // Bloom pass: black background so the page-white never blooms
+      scene.background = new THREE.Color(0x000000);
+      camera.layers.set(BLOOM_LAYER);
+      bloomComposer.render();
+
+      // Final pass: white background + additive bloom texture
+      scene.background = savedBg;
+      camera.layers.set(0);
+      finalComposer.render();
+
+      requestAnimationFrame(renderFrame);
+    }
+
+    requestAnimationFrame(renderFrame);
+
+    // ============================================================
+    // Resize
+    // ============================================================
+    function onResize(){
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.DPR_MAX));
+      renderer.setSize(w,h);
+      camera.aspect = w/h;
+      camera.updateProjectionMatrix();
+
+      bloomComposer.setSize(w,h);
+      finalComposer.setSize(w,h);
+      bloomPass.setSize(w,h);
+    }
+    window.addEventListener('resize', onResize);
+
+    // Set initial
+    setActiveUI(currentId);
+  </script>
+</body>
+</html>
